@@ -95,7 +95,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == '/api/v2/messages':
+        if parsed.path == '/api/v1/messages':
             items = []
             for mail in self._messages:
                 items.append(self._mail2hash(mail))

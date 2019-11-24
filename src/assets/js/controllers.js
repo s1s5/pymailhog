@@ -35,7 +35,7 @@ mailhogApp.directive('ngKeyEnter', function () {
 });
 
 mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
-  $scope.host = apiHost;
+  $scope.host = '';
 
   $scope.cache = {};
   $scope.previewAllHeaders = false;
@@ -72,36 +72,6 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
   $scope.smtpmech = "NONE"
   $scope.selectedOutgoingSMTP = ""
   $scope.saveSMTPServer = false;
-/*
-  $scope.getJim = function() {
-    var url = $scope.host + 'api/v2/jim'
-    $http.get(url).success(function(data) {
-      $scope.jim = data
-    }).error(function() {
-      $scope.jim = null
-    })
-  }
-  $scope.getJim()
-
-  $scope.enableJim = function() {
-    var url = $scope.host + 'api/v2/jim'
-    $http.post(url).success(function(data) {
-      $scope.getJim()
-    })
-  }
-  $scope.disableJim = function() {
-    var url = $scope.host + 'api/v2/jim'
-    $http.delete(url).success(function(data) {
-      $scope.getJim()
-    })
-  }
-
-  $(function() {
-    $scope.openStream();
-    if(typeof(Notification) !== "undefined") {
-      Notification.requestPermission();
-    }
-  });*/
 
   $scope.getMoment = function(a) {
     return moment(a)
@@ -212,12 +182,7 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
       return $scope.refreshSearch();
     }
     var e = $scope.startEvent("Loading messages", null, "glyphicon-download");
-    var url = $scope.host + 'api/v2/messages'
-    if($scope.startIndex > 0) {
-      url += "?start=" + $scope.startIndex + "&limit=" + $scope.itemsPerPage;
-    } else {
-      url += "?limit=" + $scope.itemsPerPage;
-    }
+    var url = $scope.host + 'api/v1/messages'
     $http.get(url).success(function(data) {
       $scope.messages = data.items;
       $scope.totalMessages = data.total;
@@ -260,19 +225,6 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
     $scope.refreshSearch()
   }
 
-  $scope.refreshSearch = function() {
-    var url = $scope.host + 'api/v2/search?kind=' + $scope.searchKind + '&query=' + $scope.searchedText;
-    if($scope.startIndex > 0) {
-      url += "&start=" + $scope.startIndex;
-    }
-    $http.get(url).success(function(data) {
-      $scope.searchMessages = data.items;
-      $scope.totalSearchMessages = data.total;
-      $scope.countSearchMessages = data.count;
-      $scope.startSearchMessages = data.start;
-    });
-  }
-
   $scope.hasSelection = function() {
     return $(".messages :checked").length > 0 ? true : false;
   }
@@ -305,7 +257,7 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
             }
           }
         }
-        console.log(data.$cidMap)
+        //console.log(data.$cidMap)
         // TODO
         // - scan HTML parts for elements containing CID URI and replace
 
@@ -424,6 +376,7 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
     return false;
   }
   $scope.getMessageHTML = function(message) {
+    /*
     console.log(message);
     for(var header in message.Content.Headers) {
       if(header.toLowerCase() == 'content-type') {
@@ -437,6 +390,7 @@ mailhogApp.controller('MailCtrl', function ($scope, $http, $sce, $timeout) {
     if(l != null && l !== "undefined") {
       return $scope.tryDecode(l);
     }
+    */
   	return "<HTML not found>";
 	}
 
