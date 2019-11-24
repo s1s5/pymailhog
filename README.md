@@ -14,7 +14,6 @@ PyMailHog is an email testing tool for developers:
 
 ### Getting started
 
-1. Either:
   * Download the latest release of PyMailHog
   * the SMTP server starts on port 1025
   * the HTTP server starts on port 8025
