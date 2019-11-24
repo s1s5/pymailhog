@@ -1,0 +1,3 @@
+import pymailhog
+
+pymailhog.main()
