@@ -31,6 +31,8 @@ class Mail(object):
         self.sender = self.decode(msg.get('From'))
         self.subject = self.decode(msg.get('Subject'))
         self.to = [to.strip() for to in self.decode(msg.get('To')).split(',')]
+        self.cc = [cc.strip() for cc in self.decode(msg.get('Cc', '')).split(',')]
+        self.bcc = [bcc.strip() for bcc in self.decode(msg.get('Bcc', '')).split(',')]
         self.body = ''
         self.attachments = {}
 
@@ -98,13 +100,18 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == '/api/v1/messages':
             items = []
             for mail in self._messages:
-                items.append(self._mail2hash(mail))
+                items.append({
+                    'ID': mail.id,
+                    'from': mail.sender,
+                    'to': mail.to,
+                    'subject': mail.subject,
+                    'date': mail.date.strftime("%Y/%m/%d %H:%M:%S"),
+                    'size': len(mail.source),
+                })
 
             self._write(json.dumps({
                 'items': items,
-                'total': len(self._messages),
-                'count': 10,
-                'start': 0
+                'total': len(self._messages)
             }))
         elif parsed.path.startswith('/api/v1/messages/'):
             mail_id = urllib.parse.unquote(parsed.path.split('/')[-1])
@@ -153,7 +160,10 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path == '/api/v2/messages':
             content_len  = int(self.headers.get('content-length'))
             mail = Mail(self.rfile.read(content_len).decode('utf-8'))
-            self._messages.append(mail)
+            self._messages.insert(0, mail)
+            if len(self._messages) > 50:
+                self._messages.pop()
+
             response = json.dumps({
                 'rec':'ok'
             })
@@ -195,6 +205,8 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             'ID': mail.id,
             'from': mail.sender,
             'to': mail.to,
+            'cc': mail.cc,
+            'bcc': mail.bcc,
             'subject': mail.subject,
             'date': mail.date.strftime("%Y/%m/%d %H:%M:%S"),
             'size': len(mail.source),
