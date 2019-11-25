@@ -256,7 +256,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 def main():
 
     server = CustomSMTPServer(('0.0.0.0', 1025), None)
-    httpd = http.server.HTTPServer(('0.0.0.0', 8025), MyHandler)
+    httpd = ThreadedHTTPServer(('0.0.0.0', 8025), MyHandler)
     httpthread = threading.Thread(target=httpd.serve_forever)
     httpthread.start()
     asyncore.loop()
