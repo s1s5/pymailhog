@@ -87,8 +87,9 @@ class Mail(object):
 class CustomSMTPServer(smtpd.SMTPServer):
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
         url = 'http://localhost:8025/api/v2/messages'
-        response = urllib.request.urlopen(url, data)
-        response.read()
+        if type(data) is str:
+            data = data.encode('utf-8')
+        urllib.request.urlopen(url, data).read()
 
 
 class MyHandler(http.server.SimpleHTTPRequestHandler):
@@ -155,8 +156,6 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
     # POSTの実装(GETは継承元にある)
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        # POSTデータの解析
-        # form = self._parse_form()
         if parsed.path == '/api/v2/messages':
             content_len  = int(self.headers.get('content-length'))
             mail = Mail(self.rfile.read(content_len).decode('utf-8'))
@@ -164,9 +163,7 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             if len(self._messages) > 50:
                 self._messages.pop()
 
-            response = json.dumps({
-                'rec':'ok'
-            })
+            response = json.dumps({'rec':'ok'})
 
         else:
             self.send_response(500)
@@ -230,21 +227,6 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Length", len(response))
         self.end_headers()
         self.wfile.write(response.encode('utf-8'))
-        
-
-    def _parse_form(self):
-        if 'Content-Type' not in self.headers:
-            return None
-        
-        # POSTデータがあれば内容を解析する
-        return cgi.FieldStorage(
-            fp=self.rfile, 
-            headers=self.headers,
-            environ={
-                'REQUEST_METHOD':'POST',
-                'CONTENT_TYPE':self.headers['Content-Type'],
-            }
-        )
 
 
 
