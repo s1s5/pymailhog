@@ -17,6 +17,7 @@ https://symfoware.blog.fc2.com/blog-entry-2408.html
 * ダウンロードリンクから最新版を取得
 * 実行権限を付与
 * 実行
+
 ```
 $ chmod +x PyMailHog-{version}
 $ ./PyMailHog-{version}
@@ -39,6 +40,8 @@ HTTPサーバーポートは8025
 * jquery 3.4 から 3.6.2へ変更
 * vue.js 2.6.10 から 2.7.11へ変更
 * filesize.js 3.1.2 から 9.0.11へ変更
+* --smtpportオプションでsmtpポートを指定可能(デフォルト1025)
+* --httpportオプションでhttpポートを指定可能(デフォルト8025)
 
 ### 0.0.2
 2019-11-25
