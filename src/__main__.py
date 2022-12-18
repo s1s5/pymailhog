@@ -1,3 +1,8 @@
+import asyncio
 import pymailhog
 
-pymailhog.main()
+try:
+    asyncio.run(pymailhog.main())
+except KeyboardInterrupt:
+    print('stop server')
+

@@ -1,24 +1,20 @@
-import time
-import smtpd
-import asyncore
+import argparse
+import asyncio
+import datetime
 import email
 import io
-
-import mimetypes
-import cgi
 import json
-import http.server
-import threading
-
-import urllib.parse
-import socketserver
-import datetime
-
-import pkgutil
 import mimetypes 
-
-import urllib.request
+import pkgutil
+import time
 import urllib.parse
+
+from http import HTTPStatus
+
+from smtphog import SMTPServerProtocol
+from httphog import WebServerProtocol
+
+__version__ = '0.0.3'
 
 class Mail(object):
 
@@ -84,20 +80,29 @@ class Mail(object):
         return body
 
 
-class CustomSMTPServer(smtpd.SMTPServer):
+class CustomSMTPServer(SMTPServerProtocol):
+    def __init__(self, messages):
+        super().__init__()
+        self._messages = messages
+        
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
-        url = 'http://localhost:8025/api/v2/messages'
-        if type(data) is str:
-            data = data.encode('utf-8')
-        urllib.request.urlopen(url, data).read()
+        if isinstance(data, bytes):
+            data = data.decode('utf-8')
+
+        mail = Mail(data)
+        self._messages.insert(0, mail)
+        if len(self._messages) > 50:
+            self._messages.pop()
 
 
-class MyHandler(http.server.SimpleHTTPRequestHandler):
+class MyHandler(WebServerProtocol):
 
-    _messages = []
+    def __init__(self, messages):
+        super().__init__()
+        self._messages = messages
 
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
+    def do_GET(self, request):
+        parsed = urllib.parse.urlparse(request.path)
         if parsed.path == '/api/v1/messages':
             items = []
             for mail in self._messages:
@@ -125,57 +130,33 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
             mail = self._find_mail(mail_id)
             tmpfile = mail.attachments[filename]
 
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/octet-stream')
-            self.send_header('Content-Disposition', 'attachment; filename="'+filename+'"')
-            self.send_header('Content-Length', len(tmpfile.getvalue()))
-            self.end_headers()
-            self.wfile.write(tmpfile.getvalue())
+            self.set_header('Content-Type', 'application/octet-stream')
+            self.set_header('Content-Disposition', 'attachment; filename="'+filename+'"')
+            self.set_header('Content-Length', len(tmpfile.getvalue()))
+            self.write(tmpfile.getvalue())
 
 
         elif parsed.path == '/':
             response = pkgutil.get_data('assets', 'index.html')
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html;charset=utf-8')
-            self.send_header('Content-Length', len(response))
-            self.end_headers()
-            self.wfile.write(response)
+            self.set_header('Content-type', 'text/html;charset=utf-8')
+            self.write(response)
 
         elif parsed.path.startswith('/assets/'):
             content_type = mimetypes.guess_type(parsed.path)[0]
             response = pkgutil.get_data('assets', parsed.path[7:])
-            self.send_response(200)
-            self.send_header('Content-type', content_type)
-            self.send_header('Content-Length', len(response))
-            self.end_headers()
-            self.wfile.write(response)
+            self.set_header('Content-type', content_type)
+            self.write(response)
         
         else:
             super().do_GET()
 
     # POSTの実装(GETは継承元にある)
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path == '/api/v2/messages':
-            content_len  = int(self.headers.get('content-length'))
-            mail = Mail(self.rfile.read(content_len).decode('utf-8'))
-            self._messages.insert(0, mail)
-            if len(self._messages) > 50:
-                self._messages.pop()
-
-            response = json.dumps({'rec':'ok'})
-
-        else:
-            self.send_response(500)
-            self.end_headers()
-            return
-        
-        # レスポンス作成
-        self._write(response)
+    def do_POST(self, request):
+        pass
 
 
-    def do_DELETE(self):
-        parsed = urllib.parse.urlparse(self.path)
+    def do_DELETE(self, request):
+        parsed = urllib.parse.urlparse(request.path)
         if parsed.path == '/api/v1/messages':
             self._messages.clear()
 
@@ -185,9 +166,6 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
                 if mail.id == mail_id:
                     self._messages.pop(i)
                     break
-
-        self.send_response(200)
-        self.end_headers()
         
 
     def _find_mail(self, mail_id):
@@ -222,26 +200,52 @@ class MyHandler(http.server.SimpleHTTPRequestHandler):
         return mail_hash
 
     def _write(self, response):
-        self.send_response(200)
-        self.send_header("Content-type", 'application/json')
-        self.send_header("Content-Length", len(response))
-        self.end_headers()
-        self.wfile.write(response.encode('utf-8'))
+        self.set_header('Content-type', 'application/json')
+        self.set_header('Content-Length', len(response))
+        self.write(response)
 
 
 
-class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-    """マルチスレッド化した HTTPServer"""
-    pass
+def args_parser():
+    parser = argparse.ArgumentParser(description='PyMailHog テスト環境でのメール確認用stmpサーバー')
 
+    parser.add_argument(
+        '-v', '--version', action='version', version='PyMailHog {}'.format(__version__)
+    )
 
-def main():
+    parser.add_argument(
+        '-sp', '--smtpport', type=int, default=1025, help='smtpサーバーのポート番号 default:1025'
+    )
 
-    server = CustomSMTPServer(('0.0.0.0', 1025), None)
-    httpd = ThreadedHTTPServer(('0.0.0.0', 8025), MyHandler)
-    httpthread = threading.Thread(target=httpd.serve_forever)
-    httpthread.start()
-    asyncore.loop()
+    parser.add_argument(
+        '-hp', '--httpport', type=int, default=8025, help='httpサーバーのポート番号 default:8025'
+    )
+
+    return parser
+
+async def main():
+    parser = args_parser()
+    args = parser.parse_args()
+
+    # SMTP / HTTPで共有するメールデータ
+    messages = []
+
+    loop = asyncio.get_running_loop()
+
+    await loop.create_server(
+        lambda: CustomSMTPServer(messages),
+        '0.0.0.0', args.smtpport)
+
+    server = await loop.create_server(
+        lambda: MyHandler(messages),
+        '0.0.0.0', args.httpport)
+
+    async with server:
+        await server.serve_forever()
+    
 
 if __name__ == '__main__':
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print('stop server')
