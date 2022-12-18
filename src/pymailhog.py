@@ -148,7 +148,7 @@ class MyHandler(WebServerProtocol):
             self.write(response)
         
         else:
-            super().do_GET()
+            super().do_GET(request)
 
     # POSTの実装(GETは継承元にある)
     def do_POST(self, request):
