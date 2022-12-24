@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>
-  <head>
+<head>
     <title>PyMailHog</title>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -9,175 +9,164 @@
 
     <link rel="icon" type="image/png" href="assets/images/hog.png">
 
-    <link rel="stylesheet" href="assets/css/bootstrap-3.3.2.min.css">
+    <link rel="stylesheet" href="assets/css/picnic.min.css">
+    <link rel="stylesheet" href="assets/css/fontello.css">
     <link rel="stylesheet" href="assets/css/style.css">
-  </head>
-  <body>
-    <nav class="navbar navbar-default navbar-static-top" role="navigation">
-      <div class="container-fluid">
-        <div class="col-md-2 col-sm-3">
-          <div class="navbar-header">
-            <a class="navbar-brand" href="#">
-              <img src="assets/images/hog.png" height="20" alt="PyMailHog"> PyMailHog
-            </a>
-          </div>
-        </div>
-      </div>
+</head>
+<body>
+    <nav>
+        <a href="#" class="brand"><img src="assets/images/hog.png" height="20" alt="PyMailHog"> <span>PyMailHog</span></a>
     </nav>
 
-    <div class="container-fluid" id="app">
-      <div class="row">
-        <div class="col-md-2 col-sm-3">
-          <ul class="nav nav-pills nav-stacked">
-            <li>
-              <a href="#" v-on:click="refresh">
-                Inbox ({{ totalMessages }})
-              </a>
-            </li>
+    <main class="container" id="app">
+        <section class="flex">
+            <div class="full fifth-800">
+                <div class="links flex one aside">
+                    <div><a class="pseudo button" v-on:click="refresh">Inbox ({{ totalMessages }})</a></div>
+                    <div><label class="pseudo button" for="confirm-delete-all"><i class="icon-cancel"></i>Delete all messages</label></div>
+                </div>
+            </div>
 
-            <li>
-              <a href="#" v-on:click="deleteAll">
-                <span class="glyphicon glyphicon-remove-circle"></span>
-                Delete all messages
-              </a>
-            </li>
-          </ul>
+            <div class="full four-fifth-800">
+                <!-- message list -->
+                <div v-if="!preview">
+                    <div class="toolbar">
+                        <button v-on:click="refresh" title="Refresh">
+                            <i class="icon-cw"></i>
+                        </button>
+                    </div>
+                    <div class="messages"  v-for="message in messages" v-on:click="selectMessage(message)">
+                        <div class="msglist-message flex three">
+                            <div class="third">
+                                {{ message.from }}
+                                <div v-if="message.to">
+                                    <div v-for="to in message.to" class="to">
+                                        {{ to }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="third">
+                                <span class="subject unread">{{ message.subject }}</span>
+                            </div>
+                            <div class="third">
+                                <div class="flex two">
+                                    <div class="three-fourth text-right">
+                                        {{ message.date }}
+                                    </div>
+                                    <div class="fourth text-right">
+                                        {{ fileSize(message.size) }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- // message list -->
+
+                <!-- message preview -->
+                <div v-if="preview">
+                    <div class="toolbar">
+                        <button v-on:click="backToInbox" title="Back to Inbox">
+                            <i class="icon-left-open"></i>
+                        </button>
+
+                        <button v-on:click="downloadEml(preview)" title="Download eml">
+                            <i class="icon-mail"></i>
+                            <a id="download-eml" href="#" download="test.eml" style="display:none"></a>
+                        </button>
+
+                        <button v-on:click="deleteOne(preview)" title="Delete" class="error">
+                            <i class="icon-trash-empty"></i>
+                        </button>
+        
+                    </div>
+
+                    <div class="preview" v-if="preview">
+                        <div class="flex twelve headers" style="font-size: 14px;padding-top: 10px">
+                            <div style="text-align: right;padding-bottom: 0px">From</div>
+                            <div class="four-fifth"  style="padding-bottom: 0px">{{ preview.from }}</div>
+                            <div></div>
+
+                            <div style="text-align: right;padding-bottom: 0px">Subject</div>
+                            <div class="four-fifth"  style="padding-bottom: 0px"><strong>{{ preview.subject }}</strong></div>
+                            <div></div>
+
+                            <div style="text-align: right;padding-bottom: 0px">To</div>
+                            <div class="four-fifth"  style="padding-bottom: 0px">{{ (preview.to || []).join(', ') }}</div>
+                            <div></div>
+
+                            <div style="text-align: right;padding-bottom: 0px">Cc</div>
+                            <div class="four-fifth"  style="padding-bottom: 0px">{{ (preview.cc || []).join(', ') }}</div>
+                            <div></div>
+
+                            <div style="text-align: right;padding-bottom: 0px">Bcc</div>
+                            <div class="four-fifth"  style="padding-bottom: 0px">{{ (preview.bcc || []).join(', ') }}</div>
+                            <div></div>
+                        </div>
+
+                        <div class="mail-content tabs" v-bind:class="[ hasHTML(preview) ? 'four' : 'three' ]">
+                            <input v-if="hasHTML(preview)" id='tab-html' type='radio' name='tabgroup' checked />
+                            <label v-if="hasHTML(preview)" class="pseudo button toggle" for="tab-html">HTML</label>
+                            <input id='tab-plane-text' type='radio' name='tabgroup' :checked="!hasHTML(preview)" />
+                            <label class="pseudo button toggle" for="tab-plane-text">Plain text</label>
+                            <input id='tab-sourcet' type='radio' name='tabgroup' />
+                            <label class="pseudo button toggle" for="tab-sourcet">Source</label>
+                            <input id='tab-mime' type='radio' name='tabgroup' />
+                            <label class="pseudo button toggle" for="tab-mime">MIME</label>
+
+                            <div class="row">
+                                <div class="tab-pane" v-if="hasHTML(preview)">
+                                    <div>
+                                        <iframe target-blank="" v-if="hasHTML(preview)" v-bind:class="{ active: hasHTML(preview) }" class="tab-pane" id="preview-html" srcdoc="{{preview.previewHTML}}" seamless frameborder="0" style="width: 100%"></iframe>
+                                    </div>
+                                </div>
+                                <div class="tab-pane" >
+                                    <div v-bind:class="{ active: !hasHTML(preview) }" id="preview-plain" v-html="formatMessagePlain(preview.body)"></div>
+                                </div>
+                                <div class="tab-pane" >
+                                    <div id="preview-source">{{ getSource(preview) }}</div>
+                                </div>
+                                <div class="tab-pane" >
+                                    <div id="preview-mime">
+                                        <div v-for="attachment in preview.attachments" class="mime-part">
+                                            <a v-bind:href="downloadUrl(preview.ID, attachment.filename)" type="button" class="button"  title="Download">
+                                                <i class="icon-download"></i>
+                                            </a>
+                                            {{ attachment.filename }} ({{ attachment.size }} bytes)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>  
+                        </div>
+                    </div>
+                </div>
+                <!-- // message preview -->
+
+            </div>
+        </section>
+
+        <div class="modal">
+            <input id="confirm-delete-all" type="checkbox" />
+            <label for="confirm-delete-all" class="overlay"></label>
+            <article>
+                <header>
+                    <h3>Delete all messages?</h3>
+                    <label for="confirm-delete-all" class="close">×</label>
+                </header>
+                <section class="content">
+                    <p>Are you sure you want to delete all messages?</p>
+                </section>
+                <footer>
+                    <label for="confirm-delete-all" class="button">Cancel</label>
+                    <button class="button dangerous" v-on:click="deleteAllConfirm">
+                        Delete all messages
+                    </button>
+                </footer>
+            </article>
         </div>
 
-        <div class="col-md-10 col-sm-9 content">
-            <div class="toolbar" v-if="!preview">
-                <button class="btn btn-default" v-on:click="refresh" title="Refresh">
-                  <i class="glyphicon glyphicon-refresh"></i>
-                </button>
-              </div>
-              
-              <div class="messages container-fluid" v-if="!preview">
-                <div class="msglist-message row" v-for="message in messages" v-on:click="selectMessage(message)">
-                  <div class="col-md-3 col-sm-4">
-                    {{ message.from }}
-              
-                    <div v-if="message.to">
-                      <div v-for="to in message.to" style="color: #777">
-                        {{ to }}
-                      </div>
-                    </div>
-                  </div>
-              
-                  <div class="col-md-5 col-sm-5">
-                    <span class="subject unread">{{ message.subject }}</span>
-                  </div>
-                  <div class="col-md-4 col-sm-3">
-                    <div class="row">
-                      <div class="col-md-9 col-sm-12 text-right">
-                        {{ message.date }}
-                      </div>
-                      <div class="col-md-3 col-sm-12 text-right">
-                        {{ fileSize(message.size) }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="toolbar" v-if="preview">
-                <button class="btn btn-default" v-on:click="backToInbox" title="Back to Inbox">
-                  <i class="glyphicon glyphicon-arrow-left"></i>
-                </button>
-              
-                <div class="spacer"></div>
-              
-                <button class="btn btn-default" v-on:click="deleteOne(preview)">
-                  <i class="glyphicon glyphicon-trash"></i>
-                </button>
+    </main>
 
-              </div>
-              
-              <div class="preview" v-if="preview">
-                <div class="row headers">
-                  <div class="col-md-12">
-                    <table>
-                      <tbody>
-                        <tr>
-                          <th>From</th>
-                          <td>{{ preview.from }}</td>
-                        </tr>
-                        <tr>
-                          <th>Subject</th>
-                          <td><strong>{{ preview.subject }}</strong></td>
-                        </tr>
-                        <tr>
-                          <th>To</th>
-                          <td>
-                            {{ (preview.to || []).join(', ') }}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Cc</th>
-                          <td>
-                            {{ (preview.cc || []).join(', ') }}
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Bcc</th>
-                          <td>
-                            {{ (preview.bcc || []).join(', ') }}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              
-                <div class="mail-content">
-                  <ul class="nav nav-tabs">
-                    <li v-if="hasHTML(preview)" v-bind:class="{ active: hasHTML(preview) }"><a href="#preview-html" data-toggle="tab">HTML</a></li>
-                    <li v-bind:class="{ active: !hasHTML(preview) }"><a href="#preview-plain" data-toggle="tab">Plain text</a></li>
-                    <li><a href="#preview-source" data-toggle="tab">Source</a></li>
-                    <li v-if="preview.attachments"><a href="#preview-mime" data-toggle="tab">MIME</a></li>
-                  </ul>
-              
-                  <div class="tab-content">
-                    <iframe target-blank="" v-if="hasHTML(preview)" v-bind:class="{ active: hasHTML(preview) }" class="tab-pane" id="preview-html" srcdoc="{{preview.previewHTML}}" seamless frameborder="0" style="width: 100%"></iframe>
-                    <div class="tab-pane" v-bind:class="{ active: !hasHTML(preview) }" id="preview-plain" v-html="formatMessagePlain(preview.body)"></div>
-                    <div class="tab-pane" id="preview-source">{{ getSource(preview) }}</div>
-                    <div class="tab-pane" id="preview-mime">
-                      <div v-for="attachment in preview.attachments" class="mime-part">
-                        <a v-bind:href="downloadUrl(preview.ID, attachment.filename)" type="button" class="btn btn-default btn-sm">
-                          <i class="glyphicon glyphicon-save"></i>
-                          Download
-                        </a>
-                        {{ attachment.filename }} ({{ attachment.size }} bytes)
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Modals -->
-              <div class="modal fade" id="confirm-delete-all">
-                <div class="modal-dialog">
-                  <div class="modal-content">
-                    <div class="modal-header">
-                      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                      <h4 class="modal-title">Delete all messages?</h4>
-                    </div>
-                    <div class="modal-body">
-                      <p>Are you sure you want to delete all messages?</p>
-                    </div>
-                    <div class="modal-footer">
-                      <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                      <button type="button" class="btn btn-danger" v-on:click="deleteAllConfirm">Delete all messages</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- End of modals -->              
-        </div>
-      </div>
-    </div>
-
-    <script src="assets/js/jquery-3.6.2.min.js"></script>
-    <script src="assets/js/bootstrap-3.3.2.min.js"></script>
     <script src="assets/js/vue.min.js"></script>
     <script src="assets/js/filesize-9.0.11.min.js"></script>
     <script src="assets/js/app.js"></script>

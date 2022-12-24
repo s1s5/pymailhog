@@ -14,24 +14,41 @@ https://symfoware.blog.fc2.com/blog-entry-2408.html
 
 ## Getting started
 
+zipapp形式で作成していますので、PyMailHog単体1あフィルのみで実行できます。
+
 * ダウンロードリンクから最新版を取得
-* 実行権限を付与
-* 実行
+* Pythonコマンドに続いてダウンロードしたファイル名を指定し実行
+
+```
+$ python3 PyMailHog-{version]}
+```
+
+Linux系OSでは、実行権限を付与した後そのまま実行も可能です。  
+python3 PyMailHog-{version}としても起動します。  
 
 ```
 $ chmod +x PyMailHog-{version}
 $ ./PyMailHog-{version}
 ```
 
-または、python3 PyMailHog-{version}としても起動します。　　
-```
-$ python3 PyMailHog-{version]}
-```
+デフォルトで  
 SMTPサーバーポートは1025  
 HTTPサーバーポートは8025  
 で起動します。
 
+オプション  
+-spまたは--smtpportでsmtpポート  
+-hpまたは--httpportでhttpポート  
+を指定できます。
+
 ## Release note
+
+### 0.0.4
+2022-12-24
+* cssフレームワークとしてpicnic cssを導入
+* .eml形式でメールをダウンロードする機能を追加
+* jquery を削除
+* bootstrapを削除
 
 ### 0.0.3
 2022-12-18

@@ -14,7 +14,7 @@ from http import HTTPStatus
 from smtphog import SMTPServerProtocol
 from httphog import WebServerProtocol
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 class Mail(object):
 
@@ -103,7 +103,7 @@ class MyHandler(WebServerProtocol):
 
     def do_GET(self, request):
         parsed = urllib.parse.urlparse(request.path)
-        if parsed.path == '/api/v1/messages':
+        if parsed.path == '/api/messages':
             items = []
             for mail in self._messages:
                 items.append({
@@ -119,13 +119,13 @@ class MyHandler(WebServerProtocol):
                 'items': items,
                 'total': len(self._messages)
             }))
-        elif parsed.path.startswith('/api/v1/messages/'):
+        elif parsed.path.startswith('/api/messages/'):
             mail_id = urllib.parse.unquote(parsed.path.split('/')[-1])
             mail = self._find_mail(mail_id)
             if mail:
                 self._write(json.dumps(self._mail2hash(mail)))
 
-        elif parsed.path.startswith('/api/v1/download/'):
+        elif parsed.path.startswith('/api/download/'):
             mail_id, filename = [urllib.parse.unquote(item) for item in parsed.path.split('/')][-2:]
             mail = self._find_mail(mail_id)
             tmpfile = mail.attachments[filename]
@@ -157,10 +157,10 @@ class MyHandler(WebServerProtocol):
 
     def do_DELETE(self, request):
         parsed = urllib.parse.urlparse(request.path)
-        if parsed.path == '/api/v1/messages':
+        if parsed.path == '/api/messages':
             self._messages.clear()
 
-        elif parsed.path.startswith('/api/v1/messages/'):
+        elif parsed.path.startswith('/api/messages/'):
             mail_id = urllib.parse.unquote(parsed.path.split('/')[-1])
             for i, mail in enumerate(self._messages):
                 if mail.id == mail_id:
@@ -240,6 +240,7 @@ async def main():
         lambda: MyHandler(messages),
         '0.0.0.0', args.httpport)
 
+    print('Listen smtp port: %d, http port: %d' % (args.smtpport, args.httpport))
     async with server:
         await server.serve_forever()
     

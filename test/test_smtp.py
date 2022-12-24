@@ -102,7 +102,7 @@ class TestPyMailHogBasic(unittest.TestCase):
 
 
     def _get_message(self, msg_id=None):
-        url = 'http://localhost:8025/api/v1/messages'
+        url = 'http://localhost:8025/api/messages'
         if msg_id:
             url += '/'+msg_id
         response = urllib.request.urlopen(url)
@@ -110,7 +110,7 @@ class TestPyMailHogBasic(unittest.TestCase):
         return json.loads(body)
 
     def _delete_message(self, msg_id=None):
-        url = 'http://localhost:8025/api/v1/messages'
+        url = 'http://localhost:8025/api/messages'
         if msg_id:
             url += '/' + msg_id
         req = urllib.request.Request(url, method='DELETE')
