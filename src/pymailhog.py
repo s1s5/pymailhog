@@ -8,6 +8,7 @@ import mimetypes
 import pkgutil
 import time
 import urllib.parse
+import uuid
 
 from http import HTTPStatus
 
@@ -22,8 +23,11 @@ class Mail(object):
         msg = email.message_from_string(data)
         
         self.source = data
-        self.id = msg.get('Message-ID')
-        self.date = self.get_format_date(msg.get('Date'))
+        self.id = msg.get('Message-ID') or uuid.uuid4().hex
+        if msg.get('Date'):
+            self.date = self.get_format_date(msg.get('Date'))
+        else:
+            self.date = datetime.datetime.utcnow()
         self.sender = self.decode(msg.get('From'))
         self.subject = self.decode(msg.get('Subject'))
         self.to = [to.strip() for to in self.decode(msg.get('To')).split(',')]
