@@ -1,3 +1,5 @@
+cloned from https://bitbucket.org/symfo/pymailhog/src/master/
+
 [MailHog](https://github.com/mailhog/MailHog)は非常に便利なツールなのですが、文字コードにiso-2022-jpを指定すると文字化けし、正しく表示されません。
 
 iso-2022-jpが正しく表示できるようPyMailHogを作成しました。  
