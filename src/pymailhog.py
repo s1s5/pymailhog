@@ -3,6 +3,7 @@ import asyncio
 import datetime
 import email
 import io
+import os
 import json
 import mimetypes 
 import pkgutil
@@ -101,13 +102,22 @@ class CustomSMTPServer(SMTPServerProtocol):
 
 class MyHandler(WebServerProtocol):
 
-    def __init__(self, messages):
+    def __init__(self, messages, base_path):
         super().__init__()
         self._messages = messages
+        if not base_path.startswith("/"):
+            base_path = "/" + base_path
+        self.base_path = base_path
 
     def do_GET(self, request):
         parsed = urllib.parse.urlparse(request.path)
-        if parsed.path == '/api/messages':
+
+        if self.base_path and parsed.path.startswith(self.base_path):
+            parsed_path = parsed.path[len(self.base_path):]
+        else:
+            parsed_path = parsed.path
+
+        if parsed_path == '/api/messages':
             items = []
             for mail in self._messages:
                 items.append({
@@ -123,31 +133,31 @@ class MyHandler(WebServerProtocol):
                 'items': items,
                 'total': len(self._messages)
             }))
-        elif parsed.path.startswith('/api/messages/'):
-            mail_id = urllib.parse.unquote(parsed.path.split('/')[-1])
+        elif parsed_path.startswith('/api/messages/'):
+            mail_id = urllib.parse.unquote(parsed_path.split('/')[-1])
             mail = self._find_mail(mail_id)
             if mail:
                 self._write(json.dumps(self._mail2hash(mail)))
 
-        elif parsed.path.startswith('/api/download/'):
-            mail_id, filename = [urllib.parse.unquote(item) for item in parsed.path.split('/')][-2:]
+        elif parsed_path.startswith('/api/download/'):
+            mail_id, filename = [urllib.parse.unquote(item) for item in parsed_path.split('/')][-2:]
             mail = self._find_mail(mail_id)
             tmpfile = mail.attachments[filename]
 
             self.set_header('Content-Type', 'application/octet-stream')
             self.set_header('Content-Disposition', 'attachment; filename="'+filename+'"')
-            self.set_header('Content-Length', len(tmpfile.getvalue()))
+            # self.set_header('Content-Length', len(tmpfile.getvalue()))
             self.write(tmpfile.getvalue())
 
 
-        elif parsed.path == '/':
+        elif parsed_path == '/':
             response = pkgutil.get_data('assets', 'index.html')
             self.set_header('Content-type', 'text/html;charset=utf-8')
             self.write(response)
 
-        elif parsed.path.startswith('/assets/'):
-            content_type = mimetypes.guess_type(parsed.path)[0]
-            response = pkgutil.get_data('assets', parsed.path[7:])
+        elif parsed_path.startswith('/assets/'):
+            content_type = mimetypes.guess_type(parsed_path)[0]
+            response = pkgutil.get_data('assets', parsed_path[7:])
             self.set_header('Content-type', content_type)
             self.write(response)
         
@@ -161,11 +171,12 @@ class MyHandler(WebServerProtocol):
 
     def do_DELETE(self, request):
         parsed = urllib.parse.urlparse(request.path)
-        if parsed.path == '/api/messages':
+        parsed_path = parsed.path.lstrip(self.base_path) if self.base_path else parsed.path
+        if parsed_path == '/api/messages':
             self._messages.clear()
 
-        elif parsed.path.startswith('/api/messages/'):
-            mail_id = urllib.parse.unquote(parsed.path.split('/')[-1])
+        elif parsed_path.startswith('/api/messages/'):
+            mail_id = urllib.parse.unquote(parsed_path.split('/')[-1])
             for i, mail in enumerate(self._messages):
                 if mail.id == mail_id:
                     self._messages.pop(i)
@@ -205,7 +216,7 @@ class MyHandler(WebServerProtocol):
 
     def _write(self, response):
         self.set_header('Content-type', 'application/json')
-        self.set_header('Content-Length', len(response))
+        # self.set_header('Content-Length', len(response))
         self.write(response)
 
 
@@ -225,6 +236,10 @@ def args_parser():
         '-hp', '--httpport', type=int, default=8025, help='httpサーバーのポート番号 default:8025'
     )
 
+    parser.add_argument(
+        "--base-path", default=os.environ.get("MH_UI_WEB_PATH", "")
+    )
+
     return parser
 
 async def main():
@@ -241,7 +256,7 @@ async def main():
         '0.0.0.0', args.smtpport)
 
     server = await loop.create_server(
-        lambda: MyHandler(messages),
+        lambda: MyHandler(messages, args.base_path),
         '0.0.0.0', args.httpport)
 
     print('Listen smtp port: %d, http port: %d' % (args.smtpport, args.httpport))
