@@ -3,42 +3,41 @@ import asyncio
 import datetime
 import email
 import io
-import os
 import json
-import mimetypes 
+import logging
+import mimetypes
+import os
 import pkgutil
 import time
 import urllib.parse
 import uuid
 
-from http import HTTPStatus
-
-from smtphog import SMTPServerProtocol
 from httphog import WebServerProtocol
+from smtphog import SMTPServerProtocol
 
-__version__ = '0.0.4'
+__version__ = "0.0.4"
+logger = logging.getLogger(__name__)
 
 class Mail(object):
-
     def __init__(self, data):
         msg = email.message_from_string(data)
-        
+
         self.source = data
-        self.id = msg.get('Message-ID') or uuid.uuid4().hex
-        if msg.get('Date'):
-            self.date = self.get_format_date(msg.get('Date'))
+        self.id = msg.get("Message-ID") or uuid.uuid4().hex
+        if msg.get("Date"):
+            self.date = self.get_format_date(msg.get("Date"))
         else:
             self.date = datetime.datetime.utcnow()
-        self.sender = self.decode(msg.get('From'))
-        self.subject = self.decode(msg.get('Subject'))
-        self.to = [to.strip() for to in self.decode(msg.get('To')).split(',')]
-        self.cc = [cc.strip() for cc in self.decode(msg.get('Cc', '')).split(',')]
-        self.bcc = [bcc.strip() for bcc in self.decode(msg.get('Bcc', '')).split(',')]
-        self.body = ''
+        self.sender = self.decode(msg.get("From"))
+        self.subject = self.decode(msg.get("Subject"))
+        self.to = [to.strip() for to in self.decode(msg.get("To")).split(",")]
+        self.cc = [cc.strip() for cc in self.decode(msg.get("Cc", "")).split(",")]
+        self.bcc = [bcc.strip() for bcc in self.decode(msg.get("Bcc", "")).split(",")]
+        self.body = ""
         self.attachments = {}
 
         for part in msg.walk():
-            if part.get_content_maintype() == 'multipart':
+            if part.get_content_maintype() == "multipart":
                 continue
 
             filename = part.get_filename()
@@ -49,23 +48,27 @@ class Mail(object):
             self.attachments[filename] = io.BytesIO(part.get_payload(decode=1))
 
     def get_format_date(self, date_string):
-        # http://www.faqs.org/rfcs/rfc2822.html
-        format_pattern = '%a, %d %b %Y %H:%M:%S'
+        try:    
+            # http://www.faqs.org/rfcs/rfc2822.html
+            format_pattern = "%a, %d %b %Y %H:%M:%S"
 
-        # 3 Jan 2012 17:58:09という形式でくるパターンもあるので、
-        # 先頭が数値だったらパターンを変更
-        if date_string[0].isdigit():
-            format_pattern = '%d %b %Y %H:%M:%S'
-        st = time.strptime(date_string[0:-6], format_pattern)
-        return datetime.datetime(*st[:6])
+            # 3 Jan 2012 17:58:09という形式でくるパターンもあるので、
+            # 先頭が数値だったらパターンを変更
+            if date_string[0].isdigit():
+                format_pattern = "%d %b %Y %H:%M:%S"
+            st = time.strptime(date_string[0:-6], format_pattern)
+            return datetime.datetime(*st[:6])
+        except Exception as e:
+            logger.exception(e)
+            return datetime.datetime.utcnow()
 
     def decode(self, dec_target):
         decodefrag = email.header.decode_header(dec_target)
 
-        value = ''
+        value = ""
         for frag, enc in decodefrag:
             if not enc:
-                enc = 'utf-8'
+                enc = "utf-8"
 
             if type(frag) is bytes:
                 value += frag.decode(enc)
@@ -75,9 +78,10 @@ class Mail(object):
         return value
 
     def decode_body(self, part):
-        body = ''
-        charset = str(part.get_content_charset())
-        if charset:
+        body = ""
+
+        if part.get_content_charset() is not None:
+            charset = str(part.get_content_charset())
             body = part.get_payload(decode=1).decode(charset)
         else:
             body = part.get_payload()
@@ -89,10 +93,10 @@ class CustomSMTPServer(SMTPServerProtocol):
     def __init__(self, messages):
         super().__init__()
         self._messages = messages
-        
+
     def process_message(self, peer, mailfrom, rcpttos, data, **kwargs):
         if isinstance(data, bytes):
-            data = data.decode('utf-8')
+            data = data.decode("utf-8")
 
         mail = Mail(data)
         self._messages.insert(0, mail)
@@ -101,7 +105,6 @@ class CustomSMTPServer(SMTPServerProtocol):
 
 
 class MyHandler(WebServerProtocol):
-
     def __init__(self, messages, base_path):
         super().__init__()
         self._messages = messages
@@ -109,58 +112,66 @@ class MyHandler(WebServerProtocol):
             base_path = "/" + base_path
         self.base_path = base_path
 
+    def parse_path(self, path: str) -> str:
+        if self.base_path and path.startswith(self.base_path):
+            parsed_path = path[len(self.base_path) :]
+        else:
+            parsed_path = path
+        parsed_path = parsed_path or "/"
+        if not parsed_path.startswith("/"):
+            parsed_path = "/" + parsed_path
+        return parsed_path
+
     def do_GET(self, request):
         parsed = urllib.parse.urlparse(request.path)
-
-        if self.base_path and parsed.path.startswith(self.base_path):
-            parsed_path = parsed.path[len(self.base_path):]
-        else:
-            parsed_path = parsed.path
-
-        if parsed_path == '/api/messages':
+        parsed_path = self.parse_path(parsed.path)
+    
+        if parsed_path == "/api/messages":
             items = []
             for mail in self._messages:
-                items.append({
-                    'ID': mail.id,
-                    'from': mail.sender,
-                    'to': mail.to,
-                    'subject': mail.subject,
-                    'date': mail.date.strftime("%Y/%m/%d %H:%M:%S"),
-                    'size': len(mail.source),
-                })
+                items.append(
+                    {
+                        "ID": mail.id,
+                        "from": mail.sender,
+                        "to": mail.to,
+                        "subject": mail.subject,
+                        "date": mail.date.strftime("%Y/%m/%d %H:%M:%S"),
+                        "size": len(mail.source),
+                    }
+                )
 
-            self._write(json.dumps({
-                'items': items,
-                'total': len(self._messages)
-            }))
-        elif parsed_path.startswith('/api/messages/'):
-            mail_id = urllib.parse.unquote(parsed_path.split('/')[-1])
+            self._write(json.dumps({"items": items, "total": len(self._messages)}))
+        elif parsed_path.startswith("/api/messages/"):
+            mail_id = urllib.parse.unquote(parsed_path.split("/")[-1])
             mail = self._find_mail(mail_id)
             if mail:
                 self._write(json.dumps(self._mail2hash(mail)))
 
-        elif parsed_path.startswith('/api/download/'):
-            mail_id, filename = [urllib.parse.unquote(item) for item in parsed_path.split('/')][-2:]
+        elif parsed_path.startswith("/api/download/"):
+            mail_id, filename = [
+                urllib.parse.unquote(item) for item in parsed_path.split("/")
+            ][-2:]
             mail = self._find_mail(mail_id)
             tmpfile = mail.attachments[filename]
 
-            self.set_header('Content-Type', 'application/octet-stream')
-            self.set_header('Content-Disposition', 'attachment; filename="'+filename+'"')
+            self.set_header("Content-Type", "application/octet-stream")
+            self.set_header(
+                "Content-Disposition", 'attachment; filename="' + filename + '"'
+            )
             # self.set_header('Content-Length', len(tmpfile.getvalue()))
             self.write(tmpfile.getvalue())
 
-
-        elif parsed_path == '/':
-            response = pkgutil.get_data('assets', 'index.html')
-            self.set_header('Content-type', 'text/html;charset=utf-8')
+        elif parsed_path == "/":
+            response = pkgutil.get_data("assets", "index.html")
+            self.set_header("Content-type", "text/html;charset=utf-8")
             self.write(response)
 
-        elif parsed_path.startswith('/assets/'):
+        elif parsed_path.startswith("/assets/"):
             content_type = mimetypes.guess_type(parsed_path)[0]
-            response = pkgutil.get_data('assets', parsed_path[7:])
-            self.set_header('Content-type', content_type)
+            response = pkgutil.get_data("assets", parsed_path[7:])
+            self.set_header("Content-type", content_type)
             self.write(response)
-        
+
         else:
             super().do_GET(request)
 
@@ -168,20 +179,20 @@ class MyHandler(WebServerProtocol):
     def do_POST(self, request):
         pass
 
-
     def do_DELETE(self, request):
         parsed = urllib.parse.urlparse(request.path)
-        parsed_path = parsed.path.lstrip(self.base_path) if self.base_path else parsed.path
-        if parsed_path == '/api/messages':
+        parsed_path = self.parse_path(parsed.path)
+        print(f"delete: '{parsed_path}'")
+
+        if parsed_path == "/api/messages":
             self._messages.clear()
 
-        elif parsed_path.startswith('/api/messages/'):
-            mail_id = urllib.parse.unquote(parsed_path.split('/')[-1])
+        elif parsed_path.startswith("/api/messages/"):
+            mail_id = urllib.parse.unquote(parsed_path.split("/")[-1])
             for i, mail in enumerate(self._messages):
                 if mail.id == mail_id:
                     self._messages.pop(i)
                     break
-        
 
     def _find_mail(self, mail_id):
         for mail in self._messages:
@@ -189,58 +200,53 @@ class MyHandler(WebServerProtocol):
                 return mail
 
         return None
-        
+
     def _mail2hash(self, mail):
         mail_hash = {
-            'ID': mail.id,
-            'from': mail.sender,
-            'to': mail.to,
-            'cc': mail.cc,
-            'bcc': mail.bcc,
-            'subject': mail.subject,
-            'date': mail.date.strftime("%Y/%m/%d %H:%M:%S"),
-            'size': len(mail.source),
-            'source': mail.source,
-            'body': mail.body,
+            "ID": mail.id,
+            "from": mail.sender,
+            "to": mail.to,
+            "cc": mail.cc,
+            "bcc": mail.bcc,
+            "subject": mail.subject,
+            "date": mail.date.strftime("%Y/%m/%d %H:%M:%S"),
+            "size": len(mail.source),
+            "source": mail.source,
+            "body": mail.body,
         }
 
         attachments = []
         for filename, tmpfile in mail.attachments.items():
-            attachments.append({
-                'filename': filename,
-                'size': len(tmpfile.getvalue())
-            })
+            attachments.append({"filename": filename, "size": len(tmpfile.getvalue())})
 
-        mail_hash['attachments'] = attachments
+        mail_hash["attachments"] = attachments
         return mail_hash
 
     def _write(self, response):
-        self.set_header('Content-type', 'application/json')
+        self.set_header("Content-type", "application/json")
         # self.set_header('Content-Length', len(response))
         self.write(response)
 
 
-
 def args_parser():
-    parser = argparse.ArgumentParser(description='PyMailHog テスト環境でのメール確認用stmpサーバー')
+    parser = argparse.ArgumentParser(description="PyMailHog テスト環境でのメール確認用stmpサーバー")
 
     parser.add_argument(
-        '-v', '--version', action='version', version='PyMailHog {}'.format(__version__)
+        "-v", "--version", action="version", version="PyMailHog {}".format(__version__)
     )
 
     parser.add_argument(
-        '-sp', '--smtpport', type=int, default=1025, help='smtpサーバーのポート番号 default:1025'
+        "-sp", "--smtpport", type=int, default=1025, help="smtpサーバーのポート番号 default:1025"
     )
 
     parser.add_argument(
-        '-hp', '--httpport', type=int, default=8025, help='httpサーバーのポート番号 default:8025'
+        "-hp", "--httpport", type=int, default=8025, help="httpサーバーのポート番号 default:8025"
     )
 
-    parser.add_argument(
-        "--base-path", default=os.environ.get("MH_UI_WEB_PATH", "")
-    )
+    parser.add_argument("--base-path", default=os.environ.get("MH_UI_WEB_PATH", ""))
 
     return parser
+
 
 async def main():
     parser = args_parser()
@@ -252,20 +258,20 @@ async def main():
     loop = asyncio.get_running_loop()
 
     await loop.create_server(
-        lambda: CustomSMTPServer(messages),
-        '0.0.0.0', args.smtpport)
+        lambda: CustomSMTPServer(messages), "0.0.0.0", args.smtpport
+    )
 
     server = await loop.create_server(
-        lambda: MyHandler(messages, args.base_path),
-        '0.0.0.0', args.httpport)
+        lambda: MyHandler(messages, args.base_path), "0.0.0.0", args.httpport
+    )
 
-    print('Listen smtp port: %d, http port: %d' % (args.smtpport, args.httpport))
+    print("Listen smtp port: %d, http port: %d" % (args.smtpport, args.httpport))
     async with server:
         await server.serve_forever()
-    
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print('stop server')
+        print("stop server")
